@@ -1,0 +1,312 @@
+#!/usr/bin/perl -s
+
+our($M,$debug);
+
+if($M){$M = "-M";}
+
+use strict;
+## use Getopt::Std; ## In near future...
+##use File::Slurp qw/slurp/;
+use Config::AutoConf;
+use Digest::MD5 'md5_hex';
+my @unlink_files = ();
+
+my $name=shift or die("usage $0 file.abc      #(output in file-incipit.pdf)\n");
+
+open (F,$name) or die("cant read $name\n");
+my @l=<F>; close F;
+for(@l){s/\r\n/\n/g;
+        s/^[TCQWO]:.*\n//g;
+}
+
+my $md5 = md5_hex(join("",@l));
+my $file = "___$md5";
+
+open (F,">$file.abc") or die("cant create temporary file ($file.abc)\n");
+print F  @l;
+close F;
+push @unlink_files, "$file.abc";
+syst("abcm2ps -q -d 20cm $M -N 0 -O $file.ps -c -a 0.95 $file.abc");
+push @unlink_files, "$file.ps";
+systopen("ps2pdf $file.ps");
+push @unlink_files, "$file.pdf";
+my $name1= $name;
+$name1 =~ s/.abc$//;
+pdfcroppage1( "$file.pdf", "$name1-incipit.pdf");
+
+sub syst{
+ my $a=shift;
+ print STDERR "...system($a)\n" if $debug;
+ system($a);
+}
+
+sub systopen {
+    my $a = shift;
+    print STDERR "...open($a|)\n" if $debug;
+    open X, "$a|" or die "$a --> $!";
+    1 while (<X>);
+    close X;
+}
+
+sub pdfcroppage1{        ### copy from  Heiko Oberdie/pdfcrop
+ my %opt =( debug => 0, verbose => 0,hires => 0,papersize => "",margins => "0 0 0 0");
+ if(ref($_[0]) eq "HASH") {%opt = (%opt , %{shift(@_)}) } ;
+ my ( $inputfile ,  $outputfile) = @_ ; 
+
+### error strings
+my $Error = "!!! Error:"; # error prefix
+
+### string constants for Ghostscript run
+# get Ghostscript command name
+my $GS = "gs";
+$GS = "gs386"    if $^O =~ /dos/i;
+$GS = "gsos2"    if $^O =~ /os2/i;
+$GS = "gswin32c" if $^O =~ /mswin32/i;
+$GS = "gswin32c" if $^O =~ /cygwin/i;
+
+# Windows detection (no SIGHUP)
+my $Win = 0;
+$Win = 1 if $^O =~ /mswin32/i;
+$Win = 1 if $^O =~ /cygwin/i;
+
+# "null" device
+use File::Spec::Functions qw(devnull);
+my $null = devnull();
+
+my $program="abc2incipit";
+### variables
+my $tmp = "tmp-\L$program\E-$$";
+
+### option variables
+my @bool = ("false", "true");
+
+
+$opt{gscmd}      = $GS;
+$opt{pdftexcmd } = "pdftex";
+#$opt{pdftexcmd } = "xetex";
+
+my $usage = <<"END_OF_USAGE";  ## This is not in use but it will be in the future
+Syntax:   \L$program\E [options] <input[.pdf]> [output file]
+Function: Margins are calculated and removed for each page in the file.
+Options:                                                    (defaults:)
+  --help              print usage
+  --(no)verbose       verbose printing                      ($bool[$opt{verbose}])
+  --(no)debug         debug informations                    ($bool[$opt{debug}])
+  --gscmd <name>      call of ghostscript                   ($opt{gscmd})
+  --pdftexcmd <name>  call of pdfTeX                        ($opt{pdftexcmd})
+  --margins "<left> <top> <right> <bottom>"                 ($opt{margins})
+                      add extra margins, unit is bp. If only one number is
+                      given, then it is used for all margins, in the case
+                      of two numbers they are also used for right and bottom.
+  --(no)clip          clipping support, if margins are set  ($bool[$opt{clip}])
+  --(no)hires         using `%%HiResBoundingBox'            ($bool[$opt{hires}])
+                      instead of `%%BoundingBox'
+  --papersize <foo>   parameter for gs's -sPAPERSIZE=<foo>,
+                      use only with older gs versions <7.32 ($opt{papersize})
+Examples:
+  \L$program\E --margins 10 input.pdf output.pdf
+  \L$program\E --margins '5 10 5 20' --clip input.pdf output.pdf
+END_OF_USAGE
+
+### margins
+my ($llx, $lly, $urx, $ury) = (0, 0, 0, 0);
+if ($opt{margins} =~
+        /^\s*([\-\.\d]+)\s+([\-\.\d]+)\s+([\-\.\d]+)\s+([\-\.\d]+)\s*$/) {
+    ($llx, $lly, $urx, $ury) = ($1, $2, $3, $4);
+}
+else {
+    if ($opt{margins} =~ /^\s*([\-\.\d]+)\s+([\-\.\d]+)\s*$/) {
+        ($llx, $lly, $urx, $ury) = ($1, $2, $1, $2);
+    }
+    else {
+        if ($opt{margins} =~ /^\s*([\-\.\d]+)\s*$/) {
+            ($llx, $lly, $urx, $ury) = ($1, $1, $1, $1);
+        }
+        else {
+            die "$Error Parse error (option --margins)!\n";
+        }
+    }
+}
+print "* Margins: $llx $lly $urx $ury\n" if $opt{debug};
+
+### cleanup system
+my $exit_code = 1;
+
+sub cleanup {
+    clean();
+    exit($exit_code);
+}
+$SIG{'INT'} = \&cleanup;
+$SIG{'__DIE__'} = \&clean;
+
+### Calculation of BoundingBoxes
+
+my $cmd = "$opt{gscmd} -sDEVICE=bbox -dBATCH -dNOPAUSE ";
+$cmd .= "-sPAPERSIZE=$opt{papersize} " if $opt{papersize};
+$cmd .= "-c save pop -f " . $inputfile;
+my $cmdpipe = $cmd . " 2>&1 1>$null |";
+
+my $tmpfile = "$tmp.tex";
+push @unlink_files, $tmpfile;
+open(TMP, ">$tmpfile") or
+    die "$Error Cannot write tmp file `$tmpfile'!\n";
+print TMP "\\def\\pdffile{$inputfile}\n";
+print TMP <<'END_TMP_HEAD';
+\csname pdfmapfile\endcsname{}
+\def\page #1 [#2 #3 #4 #5]{%
+  \count0=#1\relax
+  \setbox0=\hbox{%
+    \pdfximage page #1{\pdffile}%
+    \pdfrefximage\pdflastximage
+  }%
+  \pdfhorigin=-#2bp\relax
+  \pdfvorigin=#3bp\relax
+  \pdfpagewidth=#4bp\relax
+  \advance\pdfpagewidth by -#2bp\relax
+  \pdfpageheight=#5bp\relax
+  \advance\pdfpageheight by -#3bp\relax
+  \ht0=\pdfpageheight
+  \shipout\box0\relax
+}
+\def\pageclip #1 [#2 #3 #4 #5][#6 #7 #8 #9]{%
+  \count0=#1\relax
+  \dimen0=#4bp\relax \advance\dimen0 by -#2bp\relax
+  \edef\imagewidth{\the\dimen0}%
+  \dimen0=#5bp\relax \advance\dimen0 by -#3bp\relax
+  \edef\imageheight{\the\dimen0}%
+  \pdfximage page #1{\pdffile}%
+  \setbox0=\hbox{%
+    \kern -#2bp\relax
+    \lower #3bp\hbox{\pdfrefximage\pdflastximage}%
+  }%
+  \wd0=\imagewidth\relax
+  \ht0=\imageheight\relax
+  \dp0=0pt\relax
+  \pdfhorigin=#6pt\relax
+  \pdfvorigin=#7bp\relax
+  \pdfpagewidth=\imagewidth
+  \advance\pdfpagewidth by #6bp\relax
+  \advance\pdfpagewidth by #8bp\relax
+  \pdfpageheight=\imageheight\relax
+  \advance\pdfpageheight by #7bp\relax
+  \advance\pdfpageheight by #9bp\relax
+  \pdfxform0\relax
+  \shipout\hbox{\pdfrefxform\pdflastxform}%
+}%
+END_TMP_HEAD
+
+print "* Running ghostscript for BoundingBox calculation ...\n"
+    if $opt{verbose};
+print "* Ghostscript pipe: $cmdpipe\n" if $opt{debug};
+
+my $page = 0;
+open(CMD, $cmdpipe) or
+    die "$Error Cannot call ghostscript!\n";
+while (<CMD>) {
+    my $bb = ($opt{hires}) ? "%%HiResBoundingBox" : "%%BoundingBox";
+    next unless
+        /^$bb:\s*([\.\d]+) ([\.\d]+) ([\.\d]+) ([\.\d]+)/o;
+    $page++;
+    last if $page ==2;
+    print "* Page $page: $1 $2 $3 $4\n" if $opt{verbose};
+    if ($opt{clip}) {
+        print TMP "\\pageclip $page [$1 $2 $3 $4][$llx $lly $urx $ury]\n";
+    }
+    else {
+        my ($a, $b, $c, $d) = ($1 - $llx, $2 - $ury, $3 + $urx, $4 + $lly);
+        print TMP "\\page $page [$a $b $c $d]\n";
+    }
+}
+close(CMD);
+
+print TMP "\\csname \@\@end\\endcsname\n\\end\n";
+close(TMP);
+
+### Run pdfTeX
+
+push @unlink_files, "$tmp.log";
+if ($opt{verbose}) {
+    $cmd = "$opt{pdftexcmd} -interaction=nonstopmode $tmp";
+}
+else {
+    $cmd = "$opt{pdftexcmd} -interaction=batchmode $tmp";
+}
+print "* Running pdfTeX ...\n" if $opt{verbose};
+print "* pdfTeX call: $cmd\n" if $opt{debug};
+if ($opt{verbose}) {
+    system($cmd);
+}
+else {
+    `$cmd`;
+}
+if ($?) {
+    die "$Error pdfTeX run failed!\n";
+}
+
+### Move temp file to output
+rename "$tmp.pdf", $outputfile or
+    die "$Error Cannot move `$tmp.pdf' to `$outputfile'!\n";
+
+print "==> output written on `$outputfile'.\n" if $opt{verbose};
+
+$exit_code = 0;
+cleanup();
+}
+
+sub clean { 
+  unlink @unlink_files unless $debug; 
+}
+
+__END__
+#
+# pdfcrop.pl
+#
+# Copyright (C) 2002, 2004 Heiko Oberdiek. and JJoao!
+#
+# This program may be distributed and/or modified under the
+# conditions of the LaTeX Project Public License, either version 1.2
+# of this license or (at your option) any later version.
+# The latest version of this license is in
+#   http://www.latex-project.org/lppl.txt
+# and version 1.2 or later is part of all distributions of LaTeX
+# version 1999/12/01 or later.
+#
+#  from  ... This file "pdfcrop.pl" may be renamed to "pdfcrop"
+# for installation purposes.
+#
+my $file        = "pdfcroppage1.pl";
+my $version     = "1.5";
+my $date        = "2004/06/24";
+my $author      = "Heiko Oberdiek and JJoao";
+my $copyright   = "Copyright (c) 2002, 2004 by $author.";
+#
+
+=head1 NAME
+
+abc2incipit - makes a PDF with the first line os Abc score
+
+=head1 SYNOPSIS
+
+ abc2incipit [-M] file.abc
+     (buils file.abc-incipit.pdf
+
+=head1 DESCRIPTION
+
+Makes a PDF file with a music incipit (first score line).
+
+Input: Abc score
+
+=head2 Options
+
+ -M              remove lyrics from incipit output 
+
+=head1 AUTHOR
+
+J.Joao Almeida, jj@di.uminho.pt
+
+=head1 SEE ALSO
+
+perl(1).
+
+=cut      
+# Reqirements: Perl5, Ghostscript

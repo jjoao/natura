@@ -1,0 +1,212 @@
+\documentclass[portuges,a4paper]{article}
+\usepackage{babel}
+\usepackage{cam2tex}
+\usepackage{framed}
+%\usepackage[latin1]{inputenc}
+\usepackage[utf8]{inputenc}
+%\usepackage{fancyvrb}
+\usepackage{t1enc}
+\usepackage{aeguill}
+\def\camila{\textsc{camila}}
+\def\caixa#1{ \vskip .1cm
+\fbox{\begin{minipage}{0.95\columnwidth}#1\end{minipage}}\vskip
+.1cm }
+
+
+\begin{document}
+
+\title{Simple Camila notation}
+\author{José João Dias de Almeida}
+\date{\today}
+\maketitle
+
+
+\section{Construtores de tipos}
+
+Notação mais usada na construção de tipos:
+
+\begin{center}
+\begin{tabular}{|c|l|} \hline
+$\jjset{A} $           & \mbox{\emph{conjuntos de A}} \\
+%\jjrel{A}{B}          & \mbox{\emph{relações binárias}} \\
+$\jjff{A}{B}$          & \mbox{\emph{mappings}, correspondências de A para B} \\
+$\jjseq{A}$            & \mbox{\emph{sequências de A}}\\ 
+$\jjfunc{A}{B}$        & \mbox{\emph{funções de A para B}}\\ 
+$\jjprod{A}{B}$        & \mbox{\emph{produtos}}\\ 
+$\jjprod{campo1 : A}{campo2 : B}$ & \mbox{\emph{produto} com campos}\\ 
+$\jjalt{A}{B} $        & \mbox{\emph{alternativas}}\\ 
+$\jjany$               & \mbox{\emph{tipo universal}}\\
+$\jjnil$               & \mbox{\emph{tipo singular}}\\
+\hline
+\end{tabular}
+\end{center}
+
+A definição de um novo tipo pode incluir um predicado sobre os valores
+de modo a restrigir o conjunto portador -- \emph{invariante}.
+Se pretendermos definir um tipo \emph{data}, mesmo na sua versão mais simplificativa,
+é mais fácil definir um conjunto portador mais amplo (Exemplo produto de três 
+inteiros) e restringir os valores com uma função invariante que verifique
+a validade do triplo.
+
+\_camila{
+TYPE 
+ data = dia: INT * mes: INT * ano: INT
+ inv(d)= dia(d) >0 /\ dia(d) <= 31 /\ mes(d) >0 /\ mes(d) <= 12 /\ nyavail{...};
+ENDTYPE
+}
+
+
+Algumas funções associadas a tipos:
+
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+  tipo de uma expressão \dotfill \_camila{type(e)} \\
+  expressão compatível com tipo t \dotfill \_camila{is-t(e)} 
+\end{framed}
+
+
+\section{Funções --- $\jjfunc{A}{B}$}
+
+A linguagem \camila{} dispõem de vários modos de definir funções, podendo estas
+incluir (ou não) definição de tipos de argumentos e resultado, definição
+de pre-condição, definição de cláusula de estado.
+É também possível definir funções anónimas.
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ funções compactas \dotfill  \_camila{ f(x) *= y;} 
+ funções anónimas \dotfill \_camila{ lambda(x).f(x) } \\
+ funções com assinatura  \\ \_camila{ *func f(x1:t1,x2:t2) : t
+                                     returns g(x1,x2);} 
+ funções com assinatura e pré-condição \\ \_camila{ func f(x1:t1,x2:t2) : t
+                                     pre p(x1,x2)
+                                     returns g(x1,x2);} 
+ funções com assinatura e estado  \\ \_camila{ func f(x1:t1,x2:t2) : t
+                                     state s <- h(x1,x2,s)
+                                     returns g(x1,x2);} 
+\end{framed}
+
+É possível a definição de funções de ordem superior.
+
+\section{Construtores genéricos usados nas expressões}
+
+A linguagem \camila{} oferece alguns mecanismos habituais em linguagens de
+especificação, como sejam as expressões \emph{let} (com pattern matching
+parcial), expressões condicionais (com pattern matching parcial), 
+\emph{or} de linguagem natural.
+
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ expressão condicional \dotfill \_camila{ if(c1 -> v1, c2 ->v2, else -> vn)} \\
+ condicional com pattern matching \dotfill 
+         \_camila{ if(v1 is-<h:t> -> f(h,t) ,
+                         v2 is-<>    -> g  ,
+                         v3 is-{e:s} -> h(e,s) ,
+                         v4 is-{}    -> i,
+                         else        -> j) } \\
+ expressão let \dotfill \_camila{ let( a = e1, b = e2 ) in f(a,b) } \\
+ let com pattern matching \dotfill \_camila{ let( <a,b> = e ) in f(a,b) } \\
+ or - ou de linguagem natural \dotfill \_camila{ a or b }
+\end{framed}
+
+O operador \texttt{or}  (ou de linguagem natural) não é habitual em linguagens
+de especificação pelo que carece de uma breve explicação.
+Este operador (próximo do \emph{ou} de linguagem natural) dá como resultado 
+o primeiro argumento excepto se ele for vazio ou indefinido. É usado como
+operador binário infixo.
+
+\_camila{
+  Or(exp1,exp2)  = if(
+         exp1 == {}  -> exp2,
+         exp1 == []  -> exp2,
+         exp1 == <>  -> exp2,
+         indefinido(exp1) -> exp2,
+         else        -> exp1);
+}
+
+
+\section{Booleanos}
+
+A nível dos booleanos, existe em \camila{} as funções lógicas e quantificadores
+habituais.
+
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ Negação   \dotfill \_camila{ ~ a } \\
+ Conjunção \dotfill \_camila{ a /\ b } \\
+ Disjunção \dotfill \_camila{ a \/ b } \\
+ Implicação \dotfill \_camila{ a => b } \\
+ Quantificação universal \dotfill \_camila{ all(x <- setexp : p(x))  } \\
+ Quantificação existencial \dotfill \_camila{ exist(x <- setexp : p(x))  } \\
+ Quantificação existencial unário \dotfill \_camila{ exist1(x <- setexp : p(x))  } 
+\end{framed}
+
+\section{Mappings, correspondências --- $\jjff{A}{B}$ }
+
+As correspondências unívocas dispõem das seguintes funções predefinidas:
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ Enumeração de mappings \dotfill  \_camila{ [ a1 -> b1, a2 -> b2 ] } \\
+ Mappings em compreensão  \dotfill \_camila{ [f(a) -> g(a) | a <- setexp]} \\
+ \mbox{} \hfill \_camila{ [f(a) -> g(a) | a <- setexp /\ p(a) ]} \\
+  Domínio  \dotfill  \_camila{ dom(f)} \\
+  Contra-domínio  \dotfill  \_camila{ rng(f) } \\
+  Aplicação  \dotfill  \_camila{ f[x] } \\
+  Restrição ao domínio \dotfill  \_camila{ f / s} \\
+  Subtracção ao domínio \dotfill  \_camila{ f \ s} \\
+  Reescrita, reescrever $f$ com  $g$ \dotfill   \_camila{ f + g}
+\end{framed}
+
+\section{Sequências --- $\jjseq{A}$}
+
+As sequências de um tipo A dispõem das seguintes funções de base:
+
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ Enumeração de sequências \dotfill \_camila{ < a1 , a2 , nyavail{...}> } \\
+ Sequências em compreensão \dotfill \_camila{ <f(a)  | a <- setexp>} \\
+ \mbox{}                   \hfill \_camila{ <f(a)  | a <- setexp /\ p(a)>} \\
+ Head \dotfill \_camila{ head(s)}  \\
+ Tail \dotfill \_camila{ tail(s)} \\
+ Elemento a partir da posição \dotfill \_camila{s[i]} \\
+ primeiro elemento \dotfill \_camila{p1(x) } \\
+ segundo elemento \dotfill \_camila{p2(x) } \\
+ Concatenação \dotfill\_camila{ s ^ r} \\
+ Acrescentar elemento \dotfill\_camila{  <x> ^ s} \\
+ \mbox{} \hfill          \_camila{ < x : s > } \\
+ \mbox{} \hfill          \_camila{ s1 ^ s2 ^ nyavail{...} ^ sn } \\
+ Concatenação distribuída \dotfill\_camila{ CONC(< <nyavail{...}>, nyavail{...} >) } \\
+ Conjunto dos elementos \dotfill\_camila{  { x | x <- s } } \\
+ \mbox{} \hfill          \_camila{  elems(x) } \\
+ Índices existentes \dotfill\_camila{ inds(s) } \\
+ Inversa\dotfill \_camila{  reverse(s) } \\
+ Comprimento \dotfill \_camila{  length(s) } \\
+ Ordenação \dotfill\_camila{  sort(s)  } \\
+ Ordenação com função de comparação  \dotfill\_camila{  sort2(f,s)}
+\end{framed}
+
+As sequências podem ser heterogéneas (Exemplo $S=\jjseq{\jjany}$).
+
+\section{Conjuntos --- $\jjset{A}$}
+
+Os conjuntos dispõem das seguintes funções predefinidas:
+
+\begin{framed}
+\noindent \textbf{Descrição}  \hfill  \textbf{Notação} \ \  \\
+ Enumeração de conjuntos \dotfill \_camila{ { a1 , a2 , nyavail{...}} } \\
+ Conjuntos em compreensão \dotfill \_camila{ {f(a)  | a <- setexp}} \\
+ \mbox{} \hfill \_camila{ {f(a)  | a <- setexp /\ p(a)}} \\
+ Escolha não determinística \dotfill \_camila{ choice(c) } \\
+ Reunião  \dotfill \_camila{ c1 U c2 } \\
+ Intercepção  \dotfill \_camila{ c1 * c2 } \\
+ Subtração de conjuntos  \dotfill \_camila{ c1 - c2 } \\
+ Pertencer ao conjunto \dotfill  \_camila{ e in c } \\
+ Não pertencer ao conjunto  \dotfill  \_camila{ e notin c } \\
+ Cardinal \dotfill  \_camila{ # c } \\
+ União distribuída  \dotfill \_camila{ UNION( { {nyavail{...}}, nyavail{...}}) } \\
+ Ordenação \dotfill \_camila{sort(s)} \\
+ Ordenação com função de comparação  \dotfill \_camila{ sort2(f,s)}
+\end{framed}
+
+Os conjuntos podem ser heterogéneos (Exemplo $S=\jjset{\jjany}$).
+
+\end{document}

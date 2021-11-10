@@ -1,0 +1,19 @@
+%%% for abc:
+
+
+\def\inlinepin{\def\displayPin##1{##1}}
+\def\marginpin{\def\displayPin##1{\marginpar[]{##1}}}
+\usepackage{textcomp}
+\usepackage{graphicx}
+\usepackage{attachfile}
+%\def\displayPin#1{\marginpar[]{#1}}
+\@ifclassloaded{beamer}{\inlinepin}{\marginpin}
+%\def\incipit#1{
+%\addcontentsline{toc}{subsubsection}{\protect\includegraphics[width=0.85\textwidth]{#1-incipit.pdf}}}
+\def\incipit#1{
+ \addtocontents{toc}{\mbox{}\hfill\protect\includegraphics[width=0.80\textwidth]{#1-incipit.pdf}
+   \mbox{\ \ \ \ \ \ \ }
+
+}}
+
+%%% for ...

@@ -1,0 +1,147 @@
+#!/usr/bin/perl -s 
+
+our ($n) ;  ## -n subsections as   "1.1. title" / defaul "== title"
+undef $/;
+
+my %save=();
+my $n1=0;
+
+sub saveit{$save{++$n1}=$_[0];"__SSAVE${n1}__"}
+sub loadit{my $t = shift; 
+  $t =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+  $t;
+}
+
+while(<>){
+ s{( \\verb(\W) .*? \2)
+        }{ saveit($1)}xges;            ## save \verb
+
+ s{( \\begin\{[Vv]erbatim\} .*? \\end\{[Vv]erbatim\})
+        }{ saveit($1)}xges;            ## save verbatim
+
+ s{([^\\]) (\%.*)
+        }{$1 .saveit($2)}xge;          ## save comm
+
+ s/(?::\s*)\\begin{itemize}\s*(\n\s*)\\item/\x01:$1./g;
+ s/\\begin{itemize}\s*(\n\s*)\\item/\x01\\:$1./g;
+ s/\\end{itemize}/#\x02/g;
+ s/(?::\s*)\\begin{enumerate}\s*(\n\s*)\\item/\x03:$1.1/g;
+ s/\\begin{enumerate}\s*(\n\s*)\\item/\x03\\:$1.1/g;
+ s/\\end{enumerate}/#\x04/g;
+ s/(?::\s*)\\begin{description}\s*(\n\s*)\\item/\x05:$1./g;
+ s/\\begin{description}\s*(\n\s*)\\item/\x05\\:$1./g;
+ s/\\end{description}/#\x06/g;
+
+ while( s/\x01([^\x01-\x06]*)\x02/pr(1,$1)/e  or 
+        s/\x03([^\x01-\x06]*)\x04/pr(2,$1)/e  or 
+        s/\x05([^\x01-\x06]*)\x06/pr(3,$1)/e ) {};
+
+ s/\\item\b/.##PROBLEM##/g;
+ s/[\x01\x02\x03\x04]/##PROBLEM##/g;
+
+ s/\\section{(.*?)}/\n= $1\n/g           unless $n  ;
+ s/\\subsection{(.*?)}/\n== $1\n/g       unless $n  ;
+ s/\\subsubsection{(.*?)}/\n=== $1\n/g   unless $n  ;
+ s/\\section{(.*?)}/\n1. $1\n/g            if $n;
+ s/\\subsection{(.*?)}/\n1.1. $1\n/g       if $n;
+ s/\\subsubsection{(.*?)}/\n1.1.1. $1\n/g  if $n;
+
+ s/\\section\*{(.*?)}/\n=* $1\n/g          ;
+ s/\\subsection\*{(.*?)}/\n==* $1\n/g      ;
+ s/\\subsubsection\*{(.*?)}/\n===* $1\n/g  ;
+
+ s{\n[\ \t]*
+     \\begin\{frame\}(?:\[fragile\])?\{(.*?)\}
+     (.*?)
+     \\end\{frame\}
+  }{\n=. $1$2\n}xsg;
+
+ s{\n[\ \t]*
+     \\begin\{frame\} \s*
+     \\frametitle\{(.*?)\}
+     (.*?)
+     \\end\{frame\}
+  }{\n=. $1$2\n}xsg;
+
+ s{\n[\ \t]*
+     \\begin\{frame\} \s*
+     \[fragile\] \s*
+     \\frametitle\{(.*?)\}
+     (.*?)
+     \\end\{frame\}
+  }{\n=. $1$2\n}xsg;
+
+# s/\n[ \t]*\\begin\{frame\}\[fragile\]\s*\\frametitle\{(.*?)\}/\n=. $1/g;
+ s/(\n[ \t]*\\begin\{frame\}\s*(\\partpage)\s*\\end\{frame\})/saveit($1)/eg;
+# s/\n[ \t]*\\begin\{frame\}/\n=. \n%%/g;
+# s/\n[ \t]*\\end\{frame\}[ \t]*\n/\n%% end of frame\n/g;
+
+ print loadit($_);
+}
+
+sub pr{ my ($a,$b)=@_;
+  if ($a == 1) {$b =~ s/(\n\s*)\\item/$1./g; }
+  if ($a == 2) {$b =~ s/(\n\s*)\\item/$1.1/g; }
+  if ($a == 3) {$b =~ s/(\n\s*)\\item/$1./g; }
+  $b
+}
+
+__END__
+
+=head1 NAME
+
+tex2ptex - convert latex to prelatex notation
+
+=head1 SYNOPSIS
+
+tex2ptex [-n] file.tex > file.ptex
+
+=head1 DESCRIPTION
+
+Simpifies latex notation to prelatex;
+
+ a:                     a:
+ \begin{itemize}          . the larch
+   \item the larch      #
+ \end{itemize}
+
+ a:                     a:
+ \begin{enumerate}        .1 the larch
+   \item the larch      #
+ \end{enumerate}
+
+ a:                        a:
+ \begin{description}         .[the larch] tree
+   \item[the larch] tree   #
+ \end{description}
+
+ \section{title1}          = title1
+ \subsection{title1}       == title1
+ \subsubsection{title1}    === title1
+ \section*{title1}         =* title1
+ 
+ ### for beamer
+ \begin{frame}[fragile]    =. title1
+   \frametitle{title1}     ...
+   ...
+ \end{frame}
+
+=head2 Options
+
+ -n     makes    section (subsection etc) as     1. title 
+                                   defaul is     = title
+
+=head1 AUTHOR
+
+J.Joao Almeida, jj@di.uminho.pt
+
+=head1 SEE ALSO
+
+perl(1).
+
+prel(1)
+
+ppdflatex(1)
+
+=cut      
+

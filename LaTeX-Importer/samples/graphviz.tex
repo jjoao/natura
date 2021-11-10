@@ -1,0 +1,48 @@
+\documentclass[a4paper]{article}
+
+\usepackage{graphicx}
+
+\begin{document}
+
+
+\section*{Simple GraphViz example}
+\subsection*{Alberto Simoes}
+
+Using this \LaTeX/GraphViz combination:
+\begin{verbatim}
+  \begin{import_dot}[width=0.5\textwidth]
+    digraph "Makefile" {
+       d->a [label=34];
+       e->a b;
+       f->b[label=20];
+       d->b;
+       f->a;
+       e->c;
+       e->b;
+       e->d;
+       g->a;
+       g->d;
+       f->c;
+       d->c;
+    }
+\end{import_dot}
+\end{verbatim}
+we can get:
+\begin{import_dot}[width=0.5\textwidth]
+digraph "Makefile" {
+d->a [label=34];
+e->a b ;
+f->b[label=20];
+d->b;
+f->a;
+e->c;
+e->b;
+e->d;
+g->a;
+g->d;
+f->c;
+d->c;
+}
+\end{import_dot}
+
+\end{document}

@@ -1,0 +1,65 @@
+\documentclass[a4paper]{article}
+
+\usepackage{graphicx}
+
+\begin{document}
+
+
+\section*{Simple csv example}
+\subsection*{J.J. Almeida}
+
+Using this \LaTeX/csv tables combination:
+\begin{verbatim}
+\begin{import_csv}[fs=:]
+Idade:Nome:Peso
+34:Rui:44
+33:Ana:54
+32:Maria:49
+\end{import_csv}
+\end{verbatim}
+
+\begin{import_csv}[fs=:]
+Idade:Nome:Peso
+34:Rui:44
+33:Ana:54
+32:Maria:49
+\end{import_csv}
+
+\begin{verbatim}
+\begin{import_csv}[head=0,fs=:]
+Idade:Nome:Peso
+34:Rui:44
+33:Ana:54
+---
+32:Maria:49
+---
+32:Maria:49
+\end{import_csv}
+\end{verbatim}
+\begin{import_csv}[head=0,fs=:]
+Idade:Nome:Peso
+34:Rui:44
+33:Ana:54
+---
+32:Maria:49
+---
+32:Maria:49
+\end{import_csv}
+
+\begin{verbatim}
+\_csv{
+Idade	Nome	Peso
+34	Rui	44
+33	Ana	54
+32	Maria	49
+}
+\end{verbatim}
+
+\_csv{
+Idade	Nome	Peso
+34	Rui	44
+33	Ana	54
+32	Maria	49
+}
+
+\end{document}

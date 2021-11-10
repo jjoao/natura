@@ -1,0 +1,975 @@
+#!/usr/bin/perl
+
+use strict;
+use Getopt::Std;
+use File::Slurp qw/slurp/;
+use File::Spec::Functions;
+use Config::AutoConf;
+use Digest::MD5 'md5_hex';
+
+use Memoize;
+memoize("check_tools_for");
+
+our $VERSION = '0.02';
+
+my $n = 0;
+my @temporary_files;
+my $DEBUG = 0;
+
+my %opts;
+getopts('nsQDho:', \%opts) or die "Use -h to see usage information.\n";
+
+help()     if $opts{h};
+$DEBUG = 1 if $opts{D};
+
+## Possivelmente podemos passar a usar o RegExp::Common, nao? :)
+##jj talvez tenhas razão
+##ambs agora temos as expressoes regulares recursivas O:-)
+
+our $cam2tex_counter = 0;
+
+my $TMPDIR = 'tex-cache';
+mkdir $TMPDIR unless -d $TMPDIR;
+
+
+my $bl0 = qr([^{}]*);
+my $bl1 = qr(\{$bl0\});
+my $bl2 = qr(\{$bl0($bl1*$bl0)*\});
+my $bl3 = qr(\{$bl0($bl2*$bl0)*\});
+my $bl4 = qr(\{$bl0($bl3*$bl0)*\});
+# Called for
+#   \import_x{file}  --> proc_file
+
+sub syst{
+    my $a = shift;
+    print LOG "...system($a)\n";
+    system $a;
+}
+
+sub systopen {
+    my $a = shift;
+    print LOG "...open($a|)\n";
+    open X, "-|", $a or die $!;
+    1 while (<X>);
+    close X;
+}
+
+my %importer_types =
+  (
+   ### type -> function ;
+   ### function = filename * options * md5 -> latexStr
+   pass2 => sub { 
+       my ($f, $op, $md5) = @_;
+       my $id=$op->{id} || 33;
+       my $r;
+       my $o = catfile $TMPDIR, "$md5-$id";
+       if (! -f "$o-sol") {
+          syst  "pass-exer -nohead -srand=$id -o=$o $f";			
+       }
+       $r = slurp("$o-sol");
+       my($enun,$sol)= ($r =~  m/(.*?)\.{20}\n*(.*)/s);
+       $r="";
+       if($op->{enun})  { $r .= $enun;}
+       if($op->{sol})   { $r .= '\solname '.$sol;}
+       if($op->{result}){ $r .= $sol;}
+       return $r;
+   },
+
+   pass => sub { 
+       my ($f, $op, $md5) = @_;
+       my $id=$op->{id} || 33;
+       my $r;
+       my $o = catfile $TMPDIR, "$md5-$id";
+       if (! -f "$o-sol") {
+          syst  "pass-exer -d -nohead -srand=$id -o=$o-sol $f";			
+       }
+       $r = slurp("$o-sol");
+       my($question,$suggestion,$result,$resolution);
+       ($question)   = ($r =~  m/%%%QUESTION\n.*?\n(.*?)%%%/s);
+       ($suggestion) = ($r =~  m/%%%SUGG?ESTION\n.*?\n(.*?)%%%/s);
+       ($result)     = ($r =~  m/%%%RESULT\n.*?\n(.*?)%%%/s);
+       ($resolution) = ($r =~  m/%%%RESOLUTION\n.*?\n(.*?)%%%/s);
+       my($r1,$r2,$sopt)=("","","");
+       $r1 .= $question;
+       if($op->{endresolution}){ 
+          $r2.= $resolution || $result;}
+       elsif($op->{endresult}){ 
+          $r2.= $result || $resolution;}
+       else {    
+          $r2.= $resolution || $result;
+          $sopt = '[print]'}
+
+       return "\\begin{question}$r1\\end{question}
+\\begin{solution}$sopt$r2\\end{solution}";
+   },
+
+   pass1 => sub { 
+       my ($f, $op, $md5) = @_;
+       my $id=$op->{id} || 33;
+       my $r;
+       my $o = catfile $TMPDIR, "$md5-$id";
+       my $options ='';
+       $options .= " -res" if $op->{res};
+       $options .= " -solved" if $op->{solved};
+       if (! -f "$o") {
+          { syst "pass-exsheets $options -srand=$id -o=$o $f";}
+       }
+#      print STDERR "DEBUG: pass-exsheet -res -srand=$id -o=$o $f\n";
+       return  slurp("$o");
+   },
+
+   html => sub {
+       my ($f, $op, $md5) = @_;
+       my $o = catfile $TMPDIR, $md5;
+       if (! -f "$o.pdf") {
+           $f =~ m/html?$/ or die "Invalid extension for HTML inclusion [$f]\n";
+           syst  "htmldoc --textfont times --footer ... --header ... --webpage -f $o.pdf $f";
+       }
+       temp($o);
+       return "\\includepdf[pagecommand={},pages=-]{$o}";
+   },
+	
+   pod => sub {
+       my ($f, $op, $md5) = @_;
+       my $o = catfile $TMPDIR, $md5;
+       my $def = { "h1level" => 2, (%{$op}) };
+
+       if (! -f "$o.tex") {
+           syst  "pod2latex -h1level $def->{h1level} -out $o $f";			
+       }
+
+       my $r = slurp("$o.tex");
+       $r =~ s/section\{(.*?)\}/"section{". ucfirst(lc($1)) ."}"/ge;
+
+       return $r;
+   },
+	
+   makefileg => sub {
+       my ($f, $op, $md5) = @_;
+       $op = {scale => 0.7, (%{$op}) };
+		
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+		
+       if (!-f "$tmpfile.pdf") {
+           gvmake($op, $f, temp("$tmpfile.pdf"));			
+       }
+
+       delete $op->{root};
+       delete $op->{trim_mode};
+       delete $op->{rankdir};
+	
+       return "\\includegraphics[".hash2texargs($op)."]{$tmpfile.pdf}";		
+   },
+	
+   dot => sub {
+       my ($f, $op, $md5) = @_;
+       my $o= catfile $TMPDIR, $md5;
+       my $def={scale       => "0.9",
+                pagecommand => "",
+                frame       => "true",
+                nup         => "1x2",
+                pages       => "-",
+                delta       => "0.5cm 0.5cm",
+                (%{$op})};
+
+       if (! -f "$o.pdf") {
+           ## \begin{import_dot}[neato,width=\textwidth]
+           if (defined($op->{neato})) {
+               syst  "neato -Tpdf $f > ${f}_.pdf";			
+           } elsif (defined($op->{twopi})) {
+               syst  "twopi -Tpdf $f > ${f}_.pdf";			
+           } elsif (defined($op->{circo})) {
+               syst  "circo -Tpdf $f > ${f}_.pdf";			
+           } else {
+               syst  "dot -Tpdf $f > ${f}_.pdf";			
+           }
+           systopen("pdfcrop --xetex ${f}_.pdf $o.pdf");
+           unlink "${f}_.pdf";
+       }
+       temp("$o.pdf");					
+       delete($op->{twopi});
+       delete($op->{circo});
+       delete($op->{neato});
+
+       return "\\includegraphics[".hash2texargs($op)."]{$o.pdf}";
+   },
+
+   slides => sub {
+       my ($f, $op,$md5) = @_;
+       my $def = { scale       => "0.9",
+                   pagecommand => "",
+                   frame       => "true",
+                   nup         => "1x2",
+                   pages       => "-",
+                   delta       => "0.5cm 0.5cm",
+                   (%{$op})};
+       return "\\includepdf[".hash2texargs($def)."]{$f}";
+   },
+  );
+
+# Called for
+#   \inline_x{...} e \begin{import_x}....\end{import_x} --> proc_str
+### type -> function
+### function = str * options * md5 -> latexStr
+
+my %environment_types =
+  ( abcl => sub{
+       my ($f, $op, $md5) = @_;
+       my $abcop ="-c -q ";
+       $abcop .= "-a $op->{a}" if $op->{a};
+       my $midiop = "";
+       $midiop = "-Q $op->{t}" if $op->{t};
+       my $pin = '\fbox{\textmusicalnote}';
+       $pin = '$\odot$'                 if $op->{pin}eq "odot";
+       $pin = '\fbox{\textmusicalnote}' if $op->{pin}eq "note";
+       my $incipit="";
+
+       $n++;
+       print LOG "abcl $n - $TMPDIR/_${md5}_.abc\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+       $incipit = "\\incipit{$tmpfile}" if $op->{incipit};
+       my $sound= "";
+       my $image= "";
+
+       if (!-f "$tmpfile.pdf") {
+           open (F, ">$tmpfile.abcl") or die "Cant create temporary file($tmpfile.abcl)\n";
+           print F $f,"\n";
+           close F;
+
+#           syst  "abcm2ps $abcop $tmpfile.abc -O ${tmpfile}_.ps";
+#           syst  "ps2pdf ${tmpfile}_.ps ${tmpfile}_.pdf";
+#           if($op->{incipit}){
+#               my $incipitop ="";
+#               $incipitop="-M" if $op->{incipit} eq "nolyrics";
+#               syst   "abc2incipit $incipitop $tmpfile.abc";
+#           }
+#           systopen("pdfcrop --xetex ${tmpfile}_.pdf $tmpfile.pdf");
+
+           syst  "abcl $tmpfile.abcl > $tmpfile.abc";
+           syst  "abcm2ps $abcop $tmpfile.abc -O ${tmpfile} -E";
+           syst  "epstopdf ${tmpfile}001.eps -o=$tmpfile.pdf";
+       }
+
+       if($op->{mp3}){
+           if (!-f "$tmpfile.mp3") {
+               syst  "abc2midi $tmpfile.abc $midiop -o ${tmpfile}_.mid > _.log";
+               syst  "timidity --quiet -Ow ${tmpfile}_.mid -o ${tmpfile}_.wav > _.log";
+               syst  "lame --quiet ${tmpfile}_.wav $tmpfile.mp3 > _.log";
+               unlink "${tmpfile}_.wav";
+           }
+           #	   $displayPin="\\def\\displayPin#1{\\marginpar[]{#1}\\\\}"
+           #           $sound="\\displayPin{\\attachfile[color=1 1 1]{$tmpfile.mp3}}";
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.mp3}{$pin}}";
+       }
+       elsif($op->{wav}){
+           if (!-f "$tmpfile.wav") {
+               syst  "abc2midi $tmpfile.abc $midiop -o ${tmpfile}_.mid > _.log";
+               syst  "timidity --quiet -Ow ${tmpfile}_.mid -o $tmpfile.wav > _.log";
+           }
+           # $sound="\\displayPin{\\attachfile[color=1 1 1]{$tmpfile.wav}}";
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.wav}{$pin}}";
+       }
+       elsif($op->{midi}){
+           if (!-f "$tmpfile.mid") {
+               syst  "abc2midi $tmpfile.abc $midiop -o $tmpfile.mid > _.log";
+           }
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.mid}{$pin}}";
+       }
+
+       unlink "${tmpfile}_.pdf", "${tmpfile}_.ps";
+       ## unlink "$tmpfile.abc";			
+		
+       my $ign=$op->{noscore};
+
+       delete $op->{mp3};
+       delete $op->{noscore};
+       delete $op->{wav};
+       delete $op->{midi};
+       delete $op->{t};
+       delete $op->{pin};
+       delete $op->{a};
+       temp("$tmpfile.pdf");
+       $image="\\includegraphics[".hash2texargs($op)."]{$tmpfile}" if not $ign;
+       return $image.$sound;
+   },
+   abc => sub {
+       my ($f, $op, $md5) = @_;
+       my $abcop ="-c -q ";
+       $abcop .= "-a $op->{a}" if $op->{a};
+       my $midiop = "";
+       $midiop = "-Q $op->{t}" if $op->{t};
+       my $pin = '\fbox{\textmusicalnote}';
+       $pin = '$\odot$'                 if $op->{pin}eq "odot";
+       $pin = '\fbox{\textmusicalnote}' if $op->{pin}eq "note";
+       my $incipit="";
+
+       $n++;
+       print LOG "abc $n - $TMPDIR/_${md5}_.abc\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+       $incipit = "\\incipit{$tmpfile}" if $op->{incipit};
+       my $sound= "";
+       my $image= "";
+
+       if (!-f "$tmpfile.pdf") {
+           open (F, ">$tmpfile.abc") or die "Cant create temporary file($tmpfile.abc)\n";
+           print F $f,"\n";
+           close F;
+
+#           syst  "abcm2ps $abcop $tmpfile.abc -O ${tmpfile}_.ps";
+#           syst  "ps2pdf ${tmpfile}_.ps ${tmpfile}_.pdf";
+#           if($op->{incipit}){
+#               my $incipitop ="";
+#               $incipitop="-M" if $op->{incipit} eq "nolyrics";
+#               syst   "abc2incipit $incipitop $tmpfile.abc";
+#           }
+#           systopen("pdfcrop --xetex ${tmpfile}_.pdf $tmpfile.pdf");
+
+           syst  "abcm2ps $abcop $tmpfile.abc -O ${tmpfile} -E";
+           syst  "epstopdf ${tmpfile}001.eps -o=$tmpfile.pdf";
+           if($op->{incipit}){
+               my $incipitop ="";
+               $incipitop="-M" if $op->{incipit} eq "nolyrics";
+               syst   "abc2incipit $incipitop $tmpfile.abc";
+               systopen("pdfcrop --xetex ${tmpfile}_.pdf $tmpfile.pdf");
+           }
+       }
+
+       if($op->{mp3}){
+           if (!-f "$tmpfile.mp3") {
+               syst  "abc2midi $tmpfile.abc $midiop -o ${tmpfile}_.mid > _.log";
+               syst  "timidity --quiet -Ow ${tmpfile}_.mid -o ${tmpfile}_.wav > _.log";
+               syst  "lame --quiet ${tmpfile}_.wav $tmpfile.mp3 > _.log";
+               unlink "${tmpfile}_.wav";
+           }
+           #	   $displayPin="\\def\\displayPin#1{\\marginpar[]{#1}\\\\}"
+           #           $sound="\\displayPin{\\attachfile[color=1 1 1]{$tmpfile.mp3}}";
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.mp3}{$pin}}";
+       }
+       elsif($op->{wav}){
+           if (!-f "$tmpfile.wav") {
+               syst  "abc2midi $tmpfile.abc $midiop -o ${tmpfile}_.mid > _.log";
+               syst  "timidity --quiet -Ow ${tmpfile}_.mid -o $tmpfile.wav > _.log";
+           }
+           # $sound="\\displayPin{\\attachfile[color=1 1 1]{$tmpfile.wav}}";
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.wav}{$pin}}";
+       }
+       elsif($op->{midi}){
+           if (!-f "$tmpfile.mid") {
+               syst  "abc2midi $tmpfile.abc $midiop -o $tmpfile.mid > _.log";
+           }
+           $sound="\\displayPin{\\textattachfile[color=1 0 0]{$tmpfile.mid}{$pin}}";
+       }
+
+       unlink "${tmpfile}_.pdf", "${tmpfile}_.ps";
+       ## unlink "$tmpfile.abc";			
+		
+       my $ign=$op->{noscore};
+
+       delete $op->{mp3};
+       delete $op->{noscore};
+       delete $op->{wav};
+       delete $op->{midi};
+       delete $op->{t};
+       delete $op->{pin};
+       delete $op->{incipit};
+       delete $op->{a};
+       temp("$tmpfile.pdf");
+       $image="\\includegraphics[".hash2texargs($op)."]{$tmpfile}" if not $ign;
+       return $incipit.$image.$sound;
+   },
+
+   dot => sub {
+       my ($f, $op, $md5) = @_;
+       my $t = 'dot';
+		
+       $n++;
+       print LOG "dot $n - $TMPDIR/_${md5}_.dot\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+	
+       if (! -f "$tmpfile.pdf") {
+           open (F, ">$tmpfile.$t") or die "Cant create temporary file($tmpfile.$t)\n"; 
+           print F $f;
+           close F;
+
+           if (defined($op->{neato})) {
+               syst  "neato -Tpdf $tmpfile.$t > ${tmpfile}_.pdf";			
+           } elsif (defined($op->{twopi})) {
+               syst  "twopi -Tpdf $tmpfile.$t > ${tmpfile}_.pdf";
+           } elsif (defined($op->{circo})) {
+               syst  "circo -Tpdf $tmpfile.$t > ${tmpfile}_.pdf";
+           } else {
+               syst  "dot -Tpdf $tmpfile.$t > ${tmpfile}_.pdf";			
+           }
+           systopen("pdfcrop --xetex ${tmpfile}_.pdf $tmpfile.pdf");
+           unlink "${tmpfile}_.pdf";
+           unlink "$tmpfile.$t";
+       }
+		
+       delete $op->{neato};
+       delete $op->{circo};
+       delete $op->{twopi};
+	
+       temp("$tmpfile.pdf");
+		
+       return "\\includegraphics[".hash2texargs($op)."]{$tmpfile}";
+   },
+
+   makefileg => sub {
+       my ($f, $op, $md5) = @_;
+       $op = {scale => 0.7, (%{$op}) };
+
+       $n++;
+       print LOG "makefileg $n - $TMPDIR/_${md5}_.make\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+		
+       if (!-f "$tmpfile.pdf") {
+           open (F, ">$tmpfile") or die "Cant create temporary file($tmpfile)\n"; 
+           print F $f;
+           close F;
+
+           gvmake($op, $tmpfile, temp("$tmpfile.pdf"));
+           unlink $tmpfile;			
+       }
+			
+       delete $op->{root};
+       delete $op->{trim_mode};
+       delete $op->{rankdir};
+		
+       return "\\includegraphics[".hash2texargs($op)."]{$tmpfile.pdf}";		
+   },
+
+   csv => sub {
+       my ($f,$op) =  @_;
+       $op = {fs => "\t", head => 1, lhead => 0, %$op};
+       $n++;
+       print LOG "csv $n\n";
+       my @l = split(/\n/,$f) ;
+       shift(@l) while(not $l[0] =~ /\S/);
+       my @fl ="";
+       @fl = (split( $op->{fs}, shift(@l))); 
+       my $cols= join("",(map {"|l"} @fl ))."|";
+       my $final="\\begin{tabular}{$cols}\\hline\n";
+       $final .= join("&",@fl)."\\\\";
+       $final .= '\hline' if  $op->{head};
+       for(@l){
+           if(/^[-_]+$/) { $final .= "\n\\hline";}
+           else { $final .= "\n". join(" & ",split( $op->{fs}, $_,-1)). '\\\\';}
+       }
+       $final.='\hline\end{tabular}';
+       return $final;
+   },
+
+   gnuplot => sub {
+       my ($f, $op, $md5) = @_;
+		
+       $n++;
+       print LOG "gnuplot $n - $TMPDIR/_${md5}_\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+
+       if (!-f "$tmpfile.tex") {
+           open (F, ">$tmpfile.gnuplot") or die "Cant create temporary file($tmpfile.gnuplot)\n";
+           print F "set terminal cairolatex\nset output '$tmpfile.tex'\n";
+           print F $f;
+           close F;
+
+           syst  "gnuplot $tmpfile.gnuplot";
+           unlink "$tmpfile.gnuplot";			
+       }
+       temp("$tmpfile.tex");
+       return "\\input{$tmpfile.tex}";
+   },
+	
+   camila => sub {
+       my ($f, $op, $md5) = @_;
+		
+       $n++;
+       print LOG "camila $n - $TMPDIR/_${md5}_\n";
+       my $tmpfile = catfile $TMPDIR, "_${md5}_";
+
+       if (! -f "$tmpfile.tex") {
+           # -- ver bichomp -- $f = substr($f, 1, length($f)-2);
+           $f =~ s/;?(\s*)$/;$1/;
+           $f =~ s/ENDTYPE;?(\s*)$/ENDTYPE$1/;
+
+           open F, "| tee $tmpfile.camila | cam2tex > $tmpfile.tex" or die "can't cam2tex\n";
+           print F $f;
+           close F;			
+       }
+
+       my $res = slurp("$tmpfile.tex");
+       $res =~ s/\\\\\s*$//;  # isto ate' ja' parece java!!!
+       if ($op->{framed}) {
+           my $length = ($op->{framed} =~ /(\d+)/)?$1:0;
+           my $save_fs = "";
+           if (!$cam2tex_counter) {
+               $save_fs = "\\newlength{\\camtmp}\\setlength\\camtmp{\\FrameSep}\n";
+               $cam2tex_counter = 1;
+           }
+           my $set_fs = "\\setlength\\FrameSep{${length}mm}\n";
+           my $restore_fs = "\\setlength\\FrameSep{\\camtmp}\n";
+           $res = "$save_fs$set_fs\n\\begin{framed} \n $res \n \\end{framed} \n$restore_fs\n\n";
+       }
+       return $res;
+   },
+	
+   html => sub {
+       my ($f, $op, $md5) = @_;
+       #    my $o=$f;
+       #    $o =~ s/html?$/pdf/ or die("invalid extension\n");
+       #    system("htmldoc --textfont times --footer ...  --header ...  --webpage  -f $o $f");
+       #    return "\\includepdf[pagecommand={},pages=-]{$o}"
+   },
+
+   pod => sub {
+       my ($f, $op, $md5) = @_;
+       #    my $o=$$;
+       #    my $def={"h1level" => 2,
+       #             (%{$op})};
+       #    system("pod2latex -h1level $def->{h1level} -out $o $f");
+       #    my $r = slurp("$o.tex");
+       #    $r =~ s/section\{(.*?)\}/"section{". ucfirst(lc($1)) ."}"/ge;
+       #    unlink("$o.tex");
+       #    return $r;
+   },
+  );
+
+open LOG, ">", "teximporter$$.log" or die "Cannot open teximporter$$.log logfile.\n";
+
+undef $/;
+while(<>) {
+    my %save = ();
+    my $n1 = 0;
+
+    s{( \\begin\{[Vv]erbatim\} .*? \\end\{[Vv]erbatim\})}
+     { $save{++$n1}=$1;"__SSAVE${n1}__"}xges;            ## save verbatim
+
+    s{([^\\]) (\%.*)}
+     { $save{++$n1}=$2;"$1__SSAVE${n1}__"}xge;           ## save comm
+
+    s{  \\input \{  ([^\}]+) \} }
+     {
+         $a = $1;
+         if (-f $a) {
+           system("teximporter $a > __$a")==0 or die $?;
+         }
+         if (-f "$a.tex") {
+           system("teximporter $a.tex > __$a.tex")==0 or die $?;
+         }
+         "\\input{__$a}"
+     }gex  unless $opts{n};
+
+    s{ (\\begin\{import_(\w+)\}
+           (?:  \[  (.*?)  \]  )?
+           ((?:.|\n)*?)  
+           \\end\{import_\2\})    }
+     {  my ($a1,$a2,$a3,$a4)=($1,$2,$3,$4);
+        my $md5 = md5_hex($a1);
+        $a1 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+        $a4 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+        proc_str($md5, $a2, $a4, args2hash($a3)) }xge;
+
+    s{ (\\begin\{_(\w+)\}
+           (?:  \[  (.*?)  \]  )?
+           ((?:.|\n)*?)
+           \\end\{_\2\})   }
+     {  my ($a1,$a2,$a3,$a4)=($1,$2,$3,$4);
+        if ($environment_types{$a2}){	
+           my $md5 = md5_hex($a1);
+           $a1 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+           $a4 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+           proc_str($md5, $a2, $a4, args2hash($a3));
+        } else { $a1 }
+   }xge unless $opts{s};
+
+
+    s{ (\\_(\w+)
+           (?:  \[  (.*?)  \]  )?
+           ($bl4)) }
+     { my ($a1,$a2,$a3,$a4)=($1,$2,$3,$4);
+       if ($environment_types{$a2}) {
+         $a1 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+         $a4 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+         my $md5 = md5_hex($a1);
+         proc_str($md5, $a2, bichomp($a4), args2hash($a3));
+     } else { $a1 }
+   }xge unless $opts{s};
+
+    s{ (\\inline_(\w+)
+           (?:  \[  (.*?)  \]  )?
+           ($bl4))  }
+     { my ($a1,$a2,$a3,$a4)=($1,$2,$3,$4);
+       $a1 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+       $a4 =~ s{__SSAVE(\d+)__}{$save{$1}}g;
+       my $md5 = md5_hex($a1);
+       proc_str($md5, $a2, bichomp($a4), args2hash($a3)) }xge;
+
+    s{ \\import_(\w+)
+       (?:  \[  (.*?)  \]  )?
+       \{  (.*?)  \}   }
+     { proc_file($1, $3, args2hash($2)) }xge;
+
+    s{__SSAVE(\d+)__}{$save{$1}}g;
+
+    if($opts{o}){
+      open(my $Fo, ">", $opts{o}) or die ("cant create $opts{o}");
+      print $Fo $_;
+      close $Fo; }
+    else { 
+      print; }
+}
+
+print STDERR "Temporary files: @temporary_files\n" if $DEBUG;
+close LOG;
+
+# Save a file on temporary_files array
+sub temp {
+    push @temporary_files, @_;
+    return $_[0];
+}
+
+sub bichomp{
+    my $a=shift;
+    $a =~ s/^{//;
+    $a =~ s/}$//;
+    $a;
+}
+
+sub args2hash {
+    my %save = ();
+    my $n = 0;
+    my $a1 = shift;
+    $a1 =~ s/(\{.*?\})/$save{++$n}=$1;"__SAVE${n}__"/ge;
+    $a1 =~ s/,/=,=/g;
+    $a1 =~ s/__SAVE(\d+)__/$save{$1}/g;
+    return { map { (m/(\w+)=(.*)/) ? ($1=>$2) : ($_=>"true") } split(/\s*=,=\s*/,$a1) };
+}
+
+sub hash2texargs {
+    my $a = shift;
+    die "invalid hash ref $a\n" unless ref($a) eq "HASH";
+    return join(",", (map { "$_=$a->{$_}" } keys %$a));
+}
+
+sub proc_file {
+    my ($t,$f,$op) = @_;
+    $op ||= {};
+    my $sl=slurp($f);
+    my $md5 = -f $f ? md5_hex($sl) : md5_hex(localtime);
+
+    warn(" Processing a $t primitive...\n") unless $opts{Q};
+    if (exists($importer_types{$t})) {
+        check_tools_for($t);
+        return $importer_types{$t}->($f, $op, $md5);
+    }
+    elsif (exists($environment_types{$t})) {
+        # check_tools_for($t);
+        # return $environment_types{$t}->(slurp($f), $op, $md5);
+        return proc_str($md5,$t,$sl,$op);
+    }
+    else {
+        warn ("unknown import file type: '$t'\n");
+    }
+}
+
+sub proc_str {
+    my ($md5, $t, $f,$op)=@_;
+    $op ||= {};
+    warn(" Processing a $t primitive...\n") unless $opts{Q};
+
+    if (exists($environment_types{$t})) {
+        check_tools_for($t);
+        return $environment_types{$t}->($f, $op, $md5);
+    }
+    else { 
+     	warn "unknown inline/environment type: '$t'\n";
+    }
+}
+
+sub gvmake {
+    local $/ = "\n";
+    my %opt = ( trim_mode => 0 , rankdir => 1);
+
+    if (ref($_[0]) eq "HASH") {
+        %opt = (%opt , %{shift(@_)});
+    }
+
+    my ($makefile, $outfile) = @_;
+    my $parser = Makefile::GraphViz->new;
+    $parser->parse($makefile) or die $parser->error;
+
+    my $gv = $parser->plot(  
+                           ($opt{root} ||  $parser->target) ,
+                           init_args => { 
+                                         rankdir => $opt{rankdir},
+                                         # width => undef, height => undef, 
+                                        },
+                           trim_mode => $opt{trim_mode},
+                          );
+    ## $gv->as_canon("$outfile-1.dot");
+    $gv->as_ps("$outfile-1.ps");
+
+    syst  "ps2pdf -sPAPERSIZE=a2 $outfile-1.ps $outfile-1.pdf";
+    systopen("pdfcrop --xetex  $outfile-1.pdf $outfile");
+    unlink "$outfile-1.pdf";
+    unlink "$outfile-1.ps";
+}
+
+sub help {
+    print <<"_EOC_";
+	Usage:
+	    $0 file.tex > processed_file.tex
+
+	Options:
+	    ...
+
+_EOC_
+    exit 1;
+}
+
+sub check_tools_for {
+    my $format = shift;
+
+    if($format eq "makefileg"){ require Makefile::GraphViz }
+	
+    my %formats = (
+         html      => [qw.htmldoc.],
+         dot       => [qw.dot pdfcrop neato twopi.],
+         gnuplot   => [qw.ps2pdf gnuplot.],
+         makefileg => [qw.dot ps2pdf pdfcrop.],
+         pod       => [qw.pod2latex.],
+         abcl      => [qw.abcl abcm2ps epstopdf  ps2pdf pdfcrop abc2midi.],
+         abc       => [qw.abcm2ps epstopdf  ps2pdf pdfcrop abc2midi.],
+         camila    => [qw.cam2tex.],
+         csv    => [],
+         );
+	
+    my %tools = (
+         htmldoc   => "http://www.easysw.com/htmldoc/",
+         ps2pdf    => "http://www.ghostscript.com/",
+         pod2latex => "http://www.cpan.org/",
+         dot       => "http://www.graphviz.org/",
+         twopi     => "http://www.graphviz.org/",
+         neato     => "http://www.graphviz.org/",
+         gnuplot   => "http://www.gnuplot.info/",
+         cam2tex   => "http://natura.di.uminho.pt/download/sources/cam2tex",
+         pdfcrop   => "check texlive or other TeX distribution",
+         abcm2ps   => "http://abcplus.sourceforge.net/",
+         abc2midi   => "package abcMIDI",
+         );
+	
+    return 1 unless exists $formats{$format};
+
+    for my $tool (@{$formats{$format}}) {
+        Config::AutoConf->check_prog($tool) or
+            die "$tool is needed to use $format\nPlease install from $tools{$tool}";		
+    }
+	
+    return 1;
+}
+
+__END__
+
+=head1 NAME
+
+teximporter - a preprocessor to use HTML, GnuPlot, GraphViz and other tools directly from LaTeX
+
+=head1 SYNOPSIS
+
+ teximporter [options] a.tex > b.tex
+
+ teximporter -s a.tex > b.tex   (ignore \_fmt{...} commands)
+
+=head1 DESCRIPTION
+
+C<teximporter> command was design to help in the task of include external
+file formats into \LaTeX{}. You can:
+
+=over 4
+
+=item *
+
+Import a foreign file
+
+ \import_fmt{file}
+
+=item *
+
+Using a foreign format
+
+ \inline_fmt{extract of language fmt}
+
+or
+
+ \_fmt{extract of language fmt}
+
+or
+
+ \begin{import_fmt}
+   extract of language fmt
+ \end{import_fmt}
+
+=back
+
+Supported formats (fmt in the examples above) are:
+
+  HTML 
+  POD       (Perl documentation format)
+  slides    (PDF slides)
+  camila    (specification language )
+  gnuplot
+  dot       (graphViz)
+  makefileg (import makefile as a graph)
+  abcl      (abcl music format)
+  abc       (abc music format)
+  csv       (csv table)
+
+For instance, you can import an HTML file with
+
+  \import_html{file.html}
+
+or you can draw a Graphviz graph with
+
+  \begin{import_dot}
+     digraph "Makefile" {
+	     f -> o;
+	     o -> o;
+     }
+  \end{import_dot}
+
+=head1 Options
+
+ -h   help
+ -s   ignore \_fmt{...} notation
+ -D   keep temporary files to help debuging (not yet avail)
+ -Q   quiet mode
+ -n   don't proccess \input{file}
+ -o=file.pdf   
+ 
+=head1 Specific formats documentation
+
+Some commands support additional configuration options, that are described here.
+
+=head2 Import slides
+
+The C<import_slides> command supports the following options:
+
+  nup=2x3              (def nup=1x2)
+  pages={3,4,9-12}     (def all pages)
+
+  and also do pdfpages atributes:
+    scale=             (def "0.9")
+    pagecommand=       (def "")
+    frame=             (def "true")
+    delta=             (def "0.5cm 0.5cm")
+
+=head2 Import makefiles
+
+The C<import_makefileg> supports the following options:
+
+  root=symbol
+  scale=0.4                              (def: 0.7)
+  trim_mode=1   ignore makefile commands (def: 0)
+
+=head2 Import Abc music notation
+
+The C<import_abc> supports the following options:
+
+  mp3              to generate attatched MP3
+  midi             to generate attatched MIDI
+  wav              to generate attatched Wav
+  incipit          to generate incipit entry in the index
+  incipit=nolyrics to generate incipit entry in the index
+  noscore          skip score
+  t=120            (define quarter time for acustic music)
+  a=0.90           to make notes more compact ( [0,1] see abcm2ps)
+  +            options form includegraphics ex:
+     scale=0.6
+
+=head2 Import POD documentation
+
+The C<import_pod> supports the following options:
+
+  h1level=3             (def h1level=2)
+
+=head2 Import CSV 
+
+  fs=":"        (default \t)
+  head=1        to use first line as an header
+  lhead=1       to use first column as an header (FIXME: not yet)
+
+  --  to head a \hline
+
+=head2 Example
+
+Some command examples:
+
+  \import_html{usos_corpora.html}
+  \import_slides[nup=2x3]{/home/jj/docvs/escolaDeVerao/ta.pdf}
+  \import_slides[pages={3,4,9-12}]{/home/jj/docvs/escolaDeVerao/ta.pdf}
+  \import_pod[h1level=3]{teximporter}
+
+  \begin{import_gnuplot}
+   ... 
+  \end{import_gnuplot}
+
+  \begin{import_makefileg}
+   ... 
+  \end{import_makefileg}
+
+=head2 External Tools Requirements
+
+=over 4
+
+=item *
+
+htmldoc -- to translate HTML to PDF
+
+=item *
+
+Makefile::GraphViz -- to import Makefiles;
+
+=item *
+
+pod2latex -- to import POD
+
+=item *
+
+pdfcrop  -- to import Makefiles
+
+=item *
+
+ps2pdf -- to import Makefiles
+
+=item *
+
+graphViz -- to import Makefiles and Dot
+
+=item *
+
+gnuplot
+
+=back
+
+=head1 AUTHOR
+
+J.Joao Almeida, jj@di.uminho.pt
+
+Alberto Simoes, ambs@cpan.org
+
+=head1 SEE ALSO
+
+perl(1).
+
+LaTeX
+
+ABC,
+abcm2ps
+abc2midi
+
+ppdeflatex
+
+LaTeX::Importer
+
+sudo tlmgr  install epstopdf
+
+=cut      

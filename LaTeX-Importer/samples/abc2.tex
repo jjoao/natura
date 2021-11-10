@@ -1,0 +1,145 @@
+
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\RequirePackage[a4paper,top=2cm,left=2cm,right=2cm,bottom=1.5cm,nohead,nofoot]{geometry}
+\usepackage{graphicx}
+\usepackage{teximporter}
+
+%%\usepackage{attachfile}
+\def\displayPin#1{\marginpar[]{=#1}}
+%\usepackage{fancyvrb}
+%%\usepackage{textcomp}
+
+\parindent 0pt
+
+%%% ainda não funciona
+%%\def\incipit#1{
+%%   \addcontentsline{toc}{subsection}{\protect\includegraphics[width=0.9\textwidth]{natal-neve-incipit.pdf}}}
+
+\begin{document}
+
+\title{Simple ABC example}
+\author{J. João Almeida}
+\date{October 2008}
+\maketitle
+
+\tableofcontents
+
+\newpage
+
+\section{Using Abc in latex}
+
+Using this LaTeX/ABC combination :
+\begin{verbatim}
+%%  \begin{_abc}[mp3,width=0.9\textwidth]
+  \begin{_abc}[t=60,mp3,scale=0.9]
+  X: 1
+  M: 2/4
+  K: C
+  Q: 1/4=60
+  L: 1/8
+  EE GG|F2D2|CD EF|D4|
+  w: Cai a ne-ve bran-ca so-bre~a na-tu-reza 
+  FF EE|A2G2|GF ED|C4|
+  w: E na ter-ra~in-tei-ra há paz e be-leza
+  \end{_abc}
+
+  ...\begin{_abc}[t=60,midi,scale=0.9]  ... force 1/4=60 in sound (midi)
+\end{verbatim}
+
+
+We can build documents using text and music at the same time.
+The result obtained is:
+
+%%\begin{}[mp3,width=0.9\textwidth]
+\begin{_abc}[incipit,t=120,mp3,scale=0.9]
+X: 1
+M: 2/4
+K: C
+L: 1/8
+EE GG|F2D2|CD EF|D4|
+w: Cai a ne-ve bran-ca so-bre~a na-tu-reza e
+FF EE|A2G2|GF ED|C4|
+w: E na ter-ra~in-tei-ra há paz e be-leza
+\end{_abc}
+
+%%\begin{}[mp3,width=0.9\textwidth]
+\begin{_abc}[incipit,t=120,mp3,scale=0.9]
+X: 1
+M: 2/4
+K: C
+L: 1/8
+EE GG|F2D2|CD EF|D4|
+w: Cai a ne-ve bran-ca so-bre~a na-tu-reza e
+FF EE|A2G2|GF ED|C4|
+w: E na ter-ra~in-tei-ra há paz e be-leza
+\end{_abc}
+
+=Using import...
+
+using 
+\begin{verbatim}
+\import_abc[pin=odot,midi,width=\textwidth]{natal-neve.abc}
+\end{verbatim}
+we obtain:
+
+\import_abc[t=60,midi,width=\textwidth]{natal-neve.abc}
+
+=Example JNO
+
+
+\medskip
+
+\begin{_abc}[incipit,mp3,width=0.9\textwidth]
+X: 1 
+T: Sonata
+T: K 331i
+C: W.A. Mozart
+L: 1/8
+M: 6/8
+%%staves {(RH1 RH2)(LH1 LH2)} 
+V: RH1 clef=treble name="Piano" 
+V: RH2 clef=treble 
+V: LH1 clef=bass 
+V: LH2 clef=bass 
+K: A
+[V: RH1] c>dc e2e | B>cB d2d ||
+[V: RH2] E2E E2E | E2E E2E ||
+[V: LH1] A,>B,A, C2C | G,>A,G, B,2B, ||
+\end{_abc}
+
+after sampling by
+\fbox{
+\_abc[width=2cm]{
+X: 1
+M: 2/4
+K: C
+L: 1/8
+G2 G1|
+}}
+, we obtain:
+
+\begin{_abc}[wav,width=0.9\textwidth]
+X: 1
+T: Sonata
+T: K 331i
+T: ... after sampling by 1+1/2
+C: W.A. Mozart
+L: 1/8
+M: 6/8
+%%staves {(RH1 RH2) (LH1 LH2)} 
+V: RH1 clef=treble name="Piano" 
+V: RH2 clef=treble 
+V: LH1 clef=bass 
+V: LH2 clef=bass 
+K: A
+% 
+[V: RH1] c2 c1 e2 e1| B2 B1 d2 d1||
+[V: RH2] E2 E1 E2 E1| E2 E1 E2 E1||
+[V: LH1] A,2 A,1 C2 C1| G,2 G,1 B,2 B,1||
+[V: LH2] 
+
+\end{_abc}
+
+\end{document}
+%%[width=4cm]

@@ -1,0 +1,212 @@
+\documentclass[english,a4paper]{article}
+\usepackage{babel}
+\usepackage{cam2tex}
+\usepackage{framed}
+%\usepackage[latin1]{inputenc}
+\usepackage[utf8]{inputenc}
+%\usepackage{fancyvrb}
+\usepackage{t1enc}
+\usepackage{aeguill}
+\def\camila{\textsc{camila}}
+\def\caixa#1{ \vskip .1cm
+\fbox{\begin{minipage}{0.95\columnwidth}#1\end{minipage}}\vskip
+.1cm }
+
+
+\begin{document}
+
+\title{Simple \camila{} Notation}
+\author{José João Dias de Almeida}
+\date{\today}
+\maketitle
+
+
+\section{Type Constructors}
+
+Most frequent notation for type construction:
+
+\begin{center}
+\begin{tabular}{|c|l|} \hline
+$\jjset{A} $           & \mbox{\emph{set of A}} \\
+%\jjrel{A}{B}          & \mbox{\emph{binary relations}} \\
+$\jjff{A}{B}$          & \mbox{\emph{mapping}, A to B correspondence} \\
+$\jjseq{A}$            & \mbox{\emph{sequence of A}}\\ 
+$\jjfunc{A}{B}$        & \mbox{\emph{function from A to B}}\\ 
+$\jjprod{A}{B}$        & \mbox{\emph{products}}\\ 
+$\jjprod{field1 : A}{field2 : B}$ & \mbox{\emph{product} with field names}\\ 
+$\jjalt{A}{B} $        & \mbox{\emph{alternatives}}\\ 
+$\jjany$               & \mbox{\emph{universal type}}\\
+$\jjnil$               & \mbox{\emph{singleton type}}\\
+\hline
+\end{tabular}
+\end{center}
+
+A new type definition can include a predicate about its values in order
+to restrict the set holder --- \emph{invariant}. If we want to define a
+type \emph{date}, even in it's most simplified version, it is easier to
+define a set holder (a three integer product, for example) and constrain
+the values with an invariant function that validates the triple values.
+
+\_camila{
+TYPE 
+ date = day: INT * month: INT * year: INT
+ inv(d)= day(d) >0 /\ day(d) <= 31 /\ month(d) >0 /\ month(d) <= 12 /\ nyavail{...};
+ENDTYPE
+}
+
+
+Some functions associated with types:
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+  expression type                          \dotfill \_camila{type(e)} \\
+  expression compatible with type \emph{t} \dotfill \_camila{is-t(e)}
+\end{framed}
+
+
+\section{Functions --- $\jjfunc{A}{B}$}
+
+The \camila{} language allows several ways for functions definition. These 
+definitions may include arguments, the result type, a pre condition definition or
+a state definition. Also, it is possible to define anonymous functions.
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ compact function definition          \dotfill  \_camila{ f(x) *= y;}
+\noindent anonymous function definition        \dotfill  \_camila{ lambda(x).f(x) } \\
+ compact function with types signature        \dotfill  \_camila{ *func f(x1:t1,x2:t2) : t
+                                                           returns g(x1,x2);} 
+\noindent function with pre-condition          \dotfill  \_camila{ func f(x1:t1,x2:t2) : t
+                                                          pre p(x1,x2)
+                                                          returns g(x1,x2);} 
+\noindent display functions with state                 \dotfill  \_camila{ func* f(x1:t1,x2:t2) : t
+                                                          state s <- h(x1,x2,s)
+                                                          returns g(x1,x2);} 
+\end{framed}
+
+It is possible to define higher-order functions.
+
+
+\section{Generic expression constructors}
+
+The \camila{} language offers some of the usual mechanisms in
+specification languages, like \emph{let} and conditional expressions
+(with partial pattern matching) and natural language \emph{or}.
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ conditional expression            \dotfill \_camila{ if(c1 -> v1, c2 ->v2, else -> vn)} \\[1mm]
+ conditional with pattern matching \dotfill \_camila{ if(v1 is-<h:t> -> f(h,t) ,
+                                                         v2 is-<>    -> g  ,
+                                                         v3 is-{e:s} -> h(e,s) ,
+                                                         v4 is-{}    -> i,
+                                                         else        -> j) } \\[1mm]
+ \emph{let} expression             \dotfill \_camila{ let( a = e1, b = e2 )
+                                                      in f(a,b) } \\[1mm]
+ \emph{let} with pattern matching  \dotfill \_camila{ let( <a,b> = e )
+                                                      in f(a,b) } \\[1mm]
+ natural language \emph{or}        \dotfill \_camila{ a or b }
+\end{framed}
+
+The \texttt{or} operator is not common in specification languages so it
+requires a little explanation. This operator (close to the natural
+language \emph{or}) gives as result the first argument except if it is
+empty or undefined. It is used as an binary infix operator.
+
+\_camila{
+  Or(exp1,exp2)  = if(
+         exp1 == {}  -> exp2,
+         exp1 == []  -> exp2,
+         exp1 == <>  -> exp2,
+         undefined(exp1) -> exp2,
+         else        -> exp1);
+}
+
+
+\section{Booleans}
+
+Booleans common logic functions and quantifiers exist in \camila{}.
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ negation                          \dotfill \_camila{ ~ a } \\
+ conjunction                       \dotfill \_camila{ a /\ b } \\
+ disjunction                       \dotfill \_camila{ a \/ b } \\
+ implication                       \dotfill \_camila{ a => b } \\
+ universal quantification          \dotfill \_camila{ all(x <- setexp : p(x))  } \\
+ existential quantification        \dotfill \_camila{ exist(x <- setexp : p(x))  } \\
+ unary existential quantification  \dotfill \_camila{ exist1(x <- setexp : p(x))  } 
+\end{framed}
+
+\section{Mappings --- $\jjff{A}{B}$ }
+
+Uniform mappings can use the following predefined functions:
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ mappings by enumeration   \dotfill  \_camila{ [ a1 -> b1, a2 -> b2 ] } \\
+ mappings by comprehension \dotfill  \_camila{ [f(a) -> g(a) | a <- setexp]} \\
+                     \mbox{} \hfill  \_camila{ [f(a) -> g(a) | a <- setexp /\ p(a) ]} \\ 
+ domain                    \dotfill  \_camila{ dom(f)} \\
+ range                     \dotfill  \_camila{ rng(f) } \\
+ application               \dotfill  \_camila{ f[x] } \\
+ domain constrain          \dotfill  \_camila{ f / s} \\
+ domain subtraction        \dotfill  \_camila{ f \ s} \\
+ rewrite, rewriting $f$ with $g$ \dotfill   \_camila{ f + g}
+\end{framed}
+
+\section{Sequences --- $\jjseq{A}$}
+
+Sequences of type A can use the following base functions:
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ sequences by enumeration     \dotfill \_camila{ < a1 , a2 , nyavail{...}> } \\
+ sequences by comprehension   \dotfill \_camila{ <f(a)  | a <- setexp>} \\
+      \mbox{}                   \hfill \_camila{ <f(a)  | a <- setexp /\ p(a)>} \\
+ head                         \dotfill \_camila{ head(s)}  \\
+ tail                         \dotfill \_camila{ tail(s)} \\
+ element in position $i$      \dotfill \_camila{s[i]} \\
+ first element                \dotfill \_camila{p1(x) } \\
+ second element               \dotfill \_camila{p2(x) } \\
+ soncatenation                \dotfill \_camila{ s ^ r} \\
+ append element               \dotfill \_camila{  <x> ^ s} \\
+                        \mbox{} \hfill \_camila{ < x : s > } \\
+                        \mbox{} \hfill \_camila{ s1 ^ s2 ^ nyavail{...} ^ sn } \\
+ distributed concatenation    \dotfill \_camila{ CONC(< <nyavail{...}>, nyavail{...} >) } \\
+ elements set                 \dotfill \_camila{  { x | x <- s } } \\
+                        \mbox{} \hfill \_camila{  elems(x) } \\
+ existing indexes             \dotfill \_camila{ inds(s) } \\
+ inverse                      \dotfill \_camila{  reverse(s) } \\
+ length                       \dotfill \_camila{  length(s) } \\
+ sorted sequence              \dotfill \_camila{  sort(s)  } \\
+ custom sorted sequence       \dotfill \_camila{  sort2(f,s)}
+\end{framed}
+
+Sequences can be heterogeneous (Example $S=\jjseq{\jjany}$).
+
+
+\section{Sets --- $\jjset{A}$}
+
+Sets can use the following functions:
+
+\begin{framed}
+\noindent \textbf{Description}  \hfill  \textbf{Notation} \ \  \\
+ sets by enumeration          \dotfill \_camila{ { a1 , a2 , nyavail{...}} } \\
+ sets by comprehension        \dotfill \_camila{ {f(a)  | a <- setexp}} \\
+                        \mbox{} \hfill \_camila{ {f(a)  | a <- setexp /\ p(a)}} \\
+ non-deterministic choice     \dotfill \_camila{ choice(c) } \\
+ union                        \dotfill \_camila{ c1 U c2 } \\
+ interception                 \dotfill \_camila{ c1 * c2 } \\
+ sets difference              \dotfill \_camila{ c1 - c2 } \\
+ belonging to a set           \dotfill \_camila{ e in c } \\
+ not belonging to a set       \dotfill  \_camila{ e notin c } \\
+ number of elements           \dotfill  \_camila{ # c } \\
+ distributed union            \dotfill \_camila{ UNION( { {nyavail{...}}, nyavail{...}}) } \\
+ sorted set                   \dotfill \_camila{sort(s)} \\
+ custom sorted set            \dotfill \_camila{ sort2(f,s)}
+\end{framed}
+
+Sets can be heterogeneous (Example $S=\jjset{\jjany}$).
+
+\end{document}

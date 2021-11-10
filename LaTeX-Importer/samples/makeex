@@ -1,0 +1,11 @@
+a : recolha c
+	merge
+
+recolha : d e
+	analise 
+
+c : d e f
+	concilia 
+
+all: a
+	golpe final

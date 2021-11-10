@@ -1,0 +1,90 @@
+\documentclass[portuges,a4paper]{article}
+\RequirePackage[a4paper,top=2cm,left=2cm,right=2cm,bottom=2.5cm]{geometry}
+
+\usepackage{babel}
+\usepackage[latin1]{inputenc}
+\usepackage{t1enc}
+\usepackage{url}
+\usepackage{fancyvrb}
+\usepackage{graphicx}
+\usepackage{pdfpages}
+\usepackage{latexsym}
+\begin{document}
+
+\fvset{fontsize=\small, numbers=left, frame=leftline, numberblanklines=false}
+
+\title{Makefiles...}
+\author{José João Dias de Almeida}
+\date{versão de \today}
+\maketitle
+
+%% \tableofcontents
+
+=Importa Makefile em modo de Grafo
+
+usando o seguinte código,
+\begin{Verbatim}
+\begin{import_makefileg}[root=all,scale=0.5]
+a : recolha c
+	merge
+
+recolha : d e
+	analise 
+
+c : d e f
+	concilia 
+
+all: a
+	golpe final
+\end{import_makefileg}
+\end{Verbatim}
+
+obtém-se:
+
+\begin{import_makefileg}[root=all,scale=0.5]
+a : recolha c
+	merge
+
+recolha : d e
+	analise 
+
+c : d e f
+	concilia 
+
+all: a
+	golpe final
+\end{import_makefileg} 
+
+e com trim\_mode=1
+
+\begin{import_makefileg}[root=all,scale=0.5,trim_mode=1]
+a : recolha c
+	merge
+
+recolha : d e
+	analise 
+
+c : d e f
+	concilia 
+
+all: a
+	golpe final
+\end{import_makefileg}
+
+E em modo comando:
+ .  com rankdir = 0:
+
+\import_makefileg[trim_mode=1,rankdir=0]{makeex}
+ .  com rankdir = 1:
+
+\import_makefileg[trim_mode=1]{makeex}
+
+ .  com rankdir = 0, trimmode=0:
+\import_makefileg[trim_mode=0,rankdir=0]{makeex}
+
+ .  com rankdir = 1 trimmode=0:
+\import_makefileg[trim_mode=0,rankdir=1]{makeex}
+
+#
+
+\end{document}

@@ -1,0 +1,285 @@
+#!/usr/bin/perl -s 
+
+use 5.014;
+use File::Copy qw(move copy);
+use strict;
+use LaTeX::Importer;
+
+####### Options:
+our ($p,
+     $skp,   ## no prel (skip prel)
+     $s,     ## no prel (skip prel)
+     $twice, ## force double run of pdflatex, even without references or toc
+     $clear, ## clear temporary files after build
+     $fast,  ## pdflatex once, bibtex or index if needed, but not pdflatex again
+     $o,
+     $Q,     ## quiet
+     $debug,
+     $verbpar,
+     $temp,  ## tmp file name (instead of __pdflatex__$$)
+     $x,     ## xelatex
+     $l,     ## lualatex
+     $ti);
+
+my $ind;
+my $redo;
+my $base = $temp || "__ppdflatex__$$";
+
+$clear //= 1;
+$clear = 0 if $debug;
+
+$Q    = "-Q" if $Q;
+my $Qtex = "";
+$Qtex = "-interaction  nonstopmode" if $Q;
+
+my $texerrorsfilter = "" ; 
+$texerrorsfilter = "| sed -n -e '/^[!]/,+2p' " if $Q;
+
+my $a; # filename
+$a = shift ;
+$a = "<-"  if($p and not $a);
+
+die "usage $0 file.pre\n" unless $a;
+
+if (!-f $a) {
+    $a =~ s/\.$//;
+    $a .= ".tlpp" if (-f "$a.tlpp");
+    $a .= ".ptex" if (-f "$a.ptex");
+    $a .= ".pre"  if (-f "$a.pre");
+    $a .= ".tex"  if (-f "$a.tex");
+}
+
+my $opt={};
+my $b = $a;
+$b =~ s/\.(tlpp|ptex|pre|tex)$//;
+
+$redo = 1 if $twice;
+
+my $c = 0;
+
+my $v={};
+
+$s=$skp if $skp;
+
+$opt->{Q}=$Q if $Q;
+$opt->{ti}=$ti if $ti;
+$opt->{skip}=$s if $s;
+
+if   ($s)       { copy($a, "$base.tex"); } 
+elsif($p and $o){ $v= prel($opt,$a, $o)         ; exit 0; }
+elsif($p       ){ $v= prel($opt,$a    )         ; exit 0; }
+else            { $v= prel($opt,$a, "$base.tex");         }
+
+
+my $pdflatex = "pdflatex $Qtex ";
+$pdflatex    = "xelatex" if $x;
+$pdflatex    = "lualatex" if $l;
+
+_syst("$pdflatex $base $texerrorsfilter");
+
+$redo = 1 if $v->{toc} || $v->{ref};
+
+if ($v->{makeindex}) { _syst("makeindex $base")           ; $redo=1;}
+if ($v->{biblatex})  { _syst("biber $base","continue")    ; $redo=1;}
+if ($v->{bibtex})    { _syst("bibtex $base","continue")   ; $redo=1;}
+if ($redo && !$fast) {
+             _syst("$pdflatex $base $texerrorsfilter"); 
+             _syst("$pdflatex $base $texerrorsfilter");
+}
+
+if($o) { move("$base.pdf" , $o      );}
+else   { move("$base.pdf" , "$b.pdf");}
+
+unlink "$base.tex" unless !$clear || $debug;
+
+if ($clear && !$fast) { ## As caution, do not clear in fast mode
+    for my $file (<$base.*>) {
+        unlink $file unless $debug; ## || $file =~ /\.toc/;
+    }
+    for my $file (<teximporter*.log>) {
+        unlink $file unless $debug;
+    }
+}
+
+
+__END__
+
+=encoding UTF-8
+
+=head1 NAME
+
+ppdflatex - (multiple) preprocessor for LaTeX 
+
+=head1 SYNOPSIS
+
+=head1 Options
+
+ -p             = just work as a preprocessor filter
+ -s             = skip prelatex
+ -Q             = Quiet
+ -ti            = force teximporter
+
+ -fast
+ -o=output.pdf
+ -verbpar       = indented paragraphs treated as verbatim
+ -debug         = does nod delete temporary files
+
+ -l             = lualatex instead of pdflatex
+ -x             = xelatex instead of pdflatex
+
+=head1 DESCRIPTION
+
+C<ppdflatex> compiles LaTeX into PDF and may (transparently) use some
+Wiki-like preprocessors:
+
+C<prelatex> (a very simple LaTeX preprocess with abbreviations for
+sections, for lists, and tables )
+
+C<beamerpp> (a very simple Beamer preprocess)
+
+C<teximporter> (inline ABC, graphviz, gnuplot, CSV, and PDF,...). 
+
+=head2 BiBteX, MakeIndex and BibLaTeX
+
+C<bibtex> and C<makeindex> are also activated if necessary.
+If C<\\bibliography> is found BibTeX is executed.
+In order to make conceptual indexes,
+if C<\\printindex> is found C<makeindex> is executed too.
+
+=head1 teximporter: Inline foreign formats
+
+In order to easilly importe external formats,
+if teximporter sintax is found (example: C<\\import_graphviz{file}>) teximporter
+preprocessor is executed.
+
+  \impor_html{file.html}
+  \import_slides[nup=2x3,pages={3,4,9-12}]{cookbook.pdf}
+  \import_pod[h1level=3]{teximporter}
+
+  \inline_abc{
+    text in language abc
+  }
+
+  \begin{import_dot}
+    digraph "Makefile" {
+       f -> o;
+       o -> o;
+    }
+  \end{import_dot}
+
+Presently the available inline formats are:
+
+  html
+  pod       (Perl documentation format)
+  slides    (PDF slides)
+  camila    (formal specification language )
+  gnuplot
+  dot       (graphViz)
+  makefileg (import makefile as a graph)
+  abc       (abc music format)
+  csv       (csv table)
+
+teximporter can be used as a normal filter (see teximporter)
+
+=head1 LateX preprocessor
+
+=head2 sections
+
+ = section title
+ == subsection title
+ === subsubsection title
+
+=head2 lists
+
+ ...itemize example:
+  . carrots
+  . onions
+  . tomatos
+  #
+
+ ...enumerate example:
+   .1 soup
+   .1 dessert
+  #
+
+ ...description example:
+   .[pizza] ...
+   .[pudim] ...
+  #
+
+=head1 Beamer slides
+
+In order to make beamer slides,
+if beamerpp sintax is found (^=. title) beamerpp preprocessor is executed too.
+
+=head2 slides notatio
+
+ = section title
+ == subsection title
+ =. slide title
+ =.== slide title and section at the same time
+
+ _( math )_
+ _ [math ]_
+ =texttt=
+ _italic_
+ *bold orange*
+
+=head2 Example of a slides presentation
+
+ \documentclass[serif]{beamer}
+ \usepackage{natslides}
+
+ \title{  }
+ \author[JJ]{J.Joao Almeida}
+ \institute{Departament of ... }
+ \begin{document}
+ \maketitle
+
+ =. Main Message 
+ :
+ . Remember that...
+ #
+
+ =. Struture of this presentation
+
+ \tableofcontents
+
+ =.= Introduction
+
+ =.== Motivation
+
+ \begin{block}{}
+ \begin{Verbatim}[fontsize=\scriptsize]
+ ...
+ \end{Verbatim}
+ \end{block}
+
+ =.= Our tool
+
+ \demo[The tool]{
+   make a demo of ...
+ }
+
+ \emph{→ in fact ...}
+
+ =.= Conclusions
+  \fixme{to be continued}
+ =.= The End
+
+
+=head1 AUTHOR
+
+J.Joao Almeida, jj@di.uminho.pt
+
+=head1 SEE ALSO
+
+teximporter
+
+LaTeX, BibTeX
+
+makeindex
+
+perl(1).
+
+=cut
