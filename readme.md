@@ -9,6 +9,9 @@
 sudo cpanm https://github.com/jjoao/natura/raw/master/Lingua-NATerm-0.03.tar.gz
 ```
 
+### Hello-world
+
+Please create a file "d.naterm" with
 ```
 %title Dicionario de Animais
 %lang PT EN
@@ -29,6 +32,8 @@ hpr: mamífero
 ```
 
 ```
-naterm -html -lang=PT d.natterm
+$ naterm -html -lang=PT d.naterm
 ```
+
+and open "d.html"
 
