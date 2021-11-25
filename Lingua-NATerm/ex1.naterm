@@ -1,0 +1,31 @@
+### Hello-world testing dictionary
+
+%title Dicionário de Animais
+%aut zoólogo anónimo
+
+%lang PT EN
+%rellang PT
+%inv hpr hyp
+%inv hyp hpr
+%inline G
+
+PT: cão
++G: m
+PT: cachorro
+EN: dog
++G: n
+def: é o melhor amigo do homem
+hpr: mamífero
+
+PT: gato
++G: m
+EN: cat
++G: n
+def: tem sete vidas,
+   e costuma miar
+hpr: mamífero
+
+PT: mamífero
+EN: mammal
+hpr: animal
+
