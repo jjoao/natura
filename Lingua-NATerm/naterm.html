@@ -1,0 +1,174 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>naterm - a dictionary DSL</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@localhost" />
+</head>
+
+<body>
+
+
+
+<ul id="index">
+  <li><a href="#NAME">NAME</a></li>
+  <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+  <li><a href="#DESCRIPTION">DESCRIPTION</a>
+    <ul>
+      <li><a href="#Dici-Language">Dici Language</a>
+        <ul>
+          <li><a href="#Metadata-section">Metadata section</a></li>
+          <li><a href="#Entries">Entries</a></li>
+          <li><a href="#Entries-from-an-external-inline-tables">Entries from an external / inline tables</a></li>
+          <li><a href="#External-tables">External tables</a></li>
+          <li><a href="#Inline-tables">Inline tables</a></li>
+        </ul>
+      </li>
+      <li><a href="#Macro-structure----Sections-with-a-common-domain">Macro structure -- Sections with a common domain</a></li>
+    </ul>
+  </li>
+  <li><a href="#AUTHOR">AUTHOR</a></li>
+  <li><a href="#SEE-ALSO">SEE ALSO</a></li>
+  <li><a href="#POD-ERRORS">POD ERRORS</a></li>
+</ul>
+
+<h1 id="NAME">NAME</h1>
+
+<p>naterm - a dictionary DSL</p>
+
+<h1 id="SYNOPSIS">SYNOPSIS</h1>
+
+<pre><code> naterm [options] file.naterm
+    -lang=EN     # default PT
+    -html
+    -tex
+    -stardict
+    -debug
+    -skel
+    -lua      -- Output is Latex:lualatex (def: Latex:pdflatex)
+    -nop2     -- &quot;:&quot; not a valid sep. (deft: PT: gato and PT=gato are equiv)
+    -p2       -- (this is the default) --  PT: gato and PT=gato are equiv
+    -lexdebug -- lex debuger while(&lt;&gt;){($t,$v)=lex(); print &quot;=$t=$v\n&quot;}</code></pre>
+
+<h1 id="DESCRIPTION">DESCRIPTION</h1>
+
+<h2 id="Dici-Language">Dici Language</h2>
+
+<h3 id="Metadata-section">Metadata section</h3>
+
+<pre><code> %name
+ %title
+ %author aut1 ; aut2 ; autn
+
+ %pre &lt; file.tex               //chapters before the dictionary
+ %introdution &lt; file.tex       // ... idem
+
+ %rename attrib1 attrib2
+ %ignore attrib
+ %inline attrib
+
+ %inv nt bt                    // inverse conceptual attribute
+ %inv dom voc
+ %rellang PT                   // language in relations objects
+
+ %img  image/directory
+
+ %lang PT EN RU
+
+ %pos                          //chapters after the dictionary</code></pre>
+
+<h3 id="Entries">Entries</h3>
+
+<p>Entries are separated by emtpy lines</p>
+
+<pre><code> !img : gato.jpg
+ PT : gato
+ +gen : m
+ def : domestic feline
+ EN : cat
+ EN : pussy-cat</code></pre>
+
+<h3 id="Entries-from-an-external-inline-tables">Entries from an external / inline tables</h3>
+
+<p>Both External and inline tables follow a CSV-like format, where:</p>
+
+<pre><code> Register separator is newline
+ Field separator is &quot;::&quot; (spaces adjacent to FS are removed)
+ Sub field separator is &quot;|&quot; (spaces adj. are ignored)
+ empty lines are ignored
+ empty fields
+ lines started by &quot;#&quot; are comments (ignored)
+ ++ fiels are concatenated with the following section</code></pre>
+
+<h3 id="External-tables">External tables</h3>
+
+<pre><code> tab(list-of-plants)*
+ PT : $2
+ EN : $1
+ dom : plants
+
+ PT : $1
+ EN : $2
+ dom : zoologia
+ *tab(tab1)</code></pre>
+
+<h3 id="Inline-tables">Inline tables</h3>
+
+<pre><code> PT : $1
+ EN : $2
+ dom : zoologia
+ *tab{
+ gato::cat
+ c&atilde;o::dog
+ }</code></pre>
+
+<h2 id="Macro-structure----Sections-with-a-common-domain">Macro structure -- Sections with a common domain</h2>
+
+<pre><code> == domain                 # dom=domain;   subdom = subsubdom = none
+ == domain ==              # idem
+
+ === subdomain             # subdom=subdomain     subsubdom = none
+ === subdomain ===         # idem
+
+ ==== subsubdomain         # subsubdom=subsubdomain
+ ==== subsubdomain ====    # idem
+
+ ==                        # no domain
+ ===                       # no subdomain
+ ====                      # no subsubdomain</code></pre>
+
+<h1 id="AUTHOR">AUTHOR</h1>
+
+<p>J.Joao Almeida, jj@di.uminho.pt</p>
+
+<h1 id="SEE-ALSO">SEE ALSO</h1>
+
+<p>Stardict</p>
+
+<p>Lingua::StarDict::Gen</p>
+
+<p>tbx2naterm</p>
+
+<p>LaTeX</p>
+
+<h1 id="POD-ERRORS">POD ERRORS</h1>
+
+<p>Hey! <b>The above document had some coding errors, which are explained below:</b></p>
+
+<dl>
+
+<dt id="Around-line-2544">Around line 2544:</dt>
+<dd>
+
+<p>Non-ASCII character seen before =encoding in &#39;c&atilde;o::dog&#39;. Assuming UTF-8</p>
+
+</dd>
+</dl>
+
+
+</body>
+
+</html>
+
+
