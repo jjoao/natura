@@ -3,7 +3,14 @@
 
 ## NATerm - authoring terminologies
 
+### Web use
+
+Create a naterm terminology in your favourite editor.
+Try it in https://natura.di.uminho.pt/jjbin/naterm.
+
 ### Install
+
+Ensure you have Perl or Strawberry Perl
 
 ```
 sudo cpanm https://github.com/jjoao/natura/raw/master/Lingua-NATerm-0.04.tar.gz
