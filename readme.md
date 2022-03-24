@@ -39,8 +39,8 @@ hpr: mamífero
 ```
 
 ```
-$ naterm -html -lang=PT d.naterm
+$ naterm -html -lang=PT ex1.naterm
 ```
 
-and open "d.html"
+and open "ex1.html"
 
