@@ -18,7 +18,7 @@ sudo cpanm https://github.com/jjoao/natura/raw/master/Lingua-NATerm-0.04.tar.gz
 
 ### Hello-world
 
-Please create a file [ex1.naterm](Lingua-NATerm/ex1.naterm) with
+Please create a file [ex1.naterm](Lingua-NATerm/ex1.naterm) with (https://raw.githubusercontent.com/jjoao/natura/master/Lingua-NATerm/ex1.naterm)
 ```
 %title Dicionario de Animais
 %lang PT EN
