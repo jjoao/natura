@@ -2,8 +2,6 @@
 .DS_Store
 
 #
-**/_.pdf
-**/_.tex
 _.pdf
 __.pdf
 _.tex
