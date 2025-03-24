@@ -15,7 +15,8 @@ keywords = ["config", "inline files", "templates", "parser"]
 dynamic = ["version", "description"]
 dependencies = [
     "pyyaml >= 6.0",
-    "jinja2"
+    "jinja2",
+    "pypugjs"
 ]
 # requires-python = ">=3.10"
 

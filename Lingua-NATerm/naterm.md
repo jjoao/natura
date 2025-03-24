@@ -44,24 +44,27 @@ naterm - a dictionary DSL
 
      %pre < file.tex               //chapters before the dictionary
      %introdution < file.tex       // ... idem
+     %pre { inline multiline preambole
+       ...
+     }
 
      %rename attrib1 attrib2
-     %ignore attrib
+     %ignore attrib                // attribute will not be present in output
      %inline attrib
 
      %inv nt bt                    // inverse conceptual attribute
      %inv dom voc
      %rellang PT                   // language in relations objects
 
-     %img  image/directory
+     %img  image/directory         // recomended: MEDIA/
 
-     %lang PT EN RU
+     %lang PT EN RU                // Languages used
 
-     %pos                          //chapters after the dictionary
+     %pos                          // chapters after the dictionary
 
 ### Entries {#Entries}
 
-Entries are separated by emtpy lines
+Entries (=concepts) are separated by emtpy lines
 
      !img : gato.jpg
      PT : gato
@@ -75,8 +78,8 @@ Entries are separated by emtpy lines
 Both External and inline tables follow a CSV-like format, where:
 
      Register separator is newline
-     Field separator is "::" (spaces adjacent to FS are removed)
-     Sub field separator is "|" (spaces adj. are ignored)
+     Field separator is "::"    (spaces adjacent to FS are removed)
+     Sub field separator is "|" (adjacent spaces are removed)
      empty lines are ignored
      empty fields
      lines started by "#" are comments (ignored)
@@ -115,9 +118,9 @@ Both External and inline tables follow a CSV-like format, where:
      ==== subsubdomain         # subsubdom=subsubdomain
      ==== subsubdomain ====    # idem
 
-     ==                        # no domain
-     ===                       # no subdomain
-     ====                      # no subsubdomain
+     ==                        # domain = subdom = subsubdom = none
+     ===                       # subdomain = subsubdom = none
+     ====                      # subsubdomain = none
 
 # AUTHOR {#AUTHOR}
 

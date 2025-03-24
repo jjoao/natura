@@ -50,9 +50,11 @@ Currently, the module supports the following types:
 - json  -- any
 - yaml  -- any
 - jj2   -- jinja2 template -- defines a function(dict, **args)
-- f   -- a f-string -- defines a function(dict, **args)
+- f     -- a f-string -- defines a function(dict, **args)
 - csv, tsv  -- list(list(str))
 - lines -- list(str)
+- pughtml -- str
+- pugjj2 -- jinja2 template in pug -- defines a function(dict, **args)
 
 
 ## File types and their importers
@@ -83,15 +85,14 @@ extension: yaml
 
 ### lines
 
-- perform text.splitlines()
-- return a list of strings
+- returns a list of strings --  text.splitlines()
 
 ### csv and tsv
 
 - performs csv-parse(txt)
 - return a list(list(strings))
 
-### templates : f (fstrings) and jinja2
+### templates : f (fstrings) and jinja2 and pugjinja2
 
 - return a function. Parameter:(d:dict or **args) → string
 
