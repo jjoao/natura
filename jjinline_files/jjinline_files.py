@@ -1,7 +1,7 @@
 """ jj Inline files - "not so pythonic" files inside your code
 """
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 import inspect
 import jinja2 as jj2, json, yaml, csv
